@@ -20,6 +20,8 @@ mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
 class Ui_MainWindow():
+    change_pixmap_signal = pyqtSignal(np.ndarray)
+
     def setupUi(self, MainWindow):
         self.font = "UD デジタル 教科書体 NK-B"
         self.selectedProgram = 0
@@ -165,11 +167,11 @@ class Ui_MainWindow():
 
     def appStart(self):
         if (self.selectedProgram == 1):
-            self.cap = cv2.VideoCapture(0,cv2.CAP_DSHOW)
-            self.function = Funciton01(self.cap)
+            self.cap = cv2.VideoCapture(0)
+            self.function = Funciton01(self.cap, self.change_pixmap_signal)
         if (self.selectedProgram == 2):
-            self.cap = cv2.VideoCapture(0,cv2.CAP_DSHOW)
-            self.function = Funciton02(self.cap)
+            self.cap = cv2.VideoCapture(0)
+            self.function = Funciton02(self.cap, self.change_pixmap_signal)
 
         self.vbox.addWidget(self.image_label)
         self.setLayout(self.vbox)
@@ -177,7 +179,7 @@ class Ui_MainWindow():
         self.function.start()
         self.stopBtn.setEnabled(True)
 
-        print(str(self.selectedProgram) + " start")
+        print(str(self.selectedProgram) + "-START")
         self.startBtn.setEnabled(False)
         self.settingBtn.setEnabled(False)
 
@@ -186,7 +188,7 @@ class Ui_MainWindow():
         self.cap.release()
         # self.function.terminate()
         self.settingBtn.setEnabled(True)
-        print("check3")
+        print("STOP")
 
     def appSettings(self):
         print("settings")
@@ -211,11 +213,10 @@ class Ui_MainWindow():
 
 
 class Funciton01(QThread):
-    change_pixmap_signal = pyqtSignal(np.ndarray)
-
-    def __init__(self, cap):
+    def __init__(self, cap, change_pixmap_signal):
         QThread.__init__(self)
         self.cap = cap
+        self.change_pixmap_signal = change_pixmap_signal
 
     def run(self):
         # capture from web cam
@@ -263,11 +264,10 @@ class Funciton01(QThread):
                 self.change_pixmap_signal.emit(image)
 
 class Funciton02(QThread):
-    change_pixmap_signal = pyqtSignal(np.ndarray)
-
-    def __init__(self, cap):
+    def __init__(self, cap, change_pixmap_signal):
         QThread.__init__(self)
         self.cap = cap
+        self.change_pixmap_signal = change_pixmap_signal
 
     def run(self):
         # capture from web cam
