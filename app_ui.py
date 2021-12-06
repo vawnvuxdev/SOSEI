@@ -7,17 +7,19 @@
 # WARNING! All changes made in this file will be lost!
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QLabel, QVBoxLayout
+from PyQt5.QtWidgets import QLabel, QVBoxLayout, QApplication, QMainWindow
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread
 import cv2
 import numpy as np
 import mediapipe as mp
+import sys
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+
 
 class Ui_MainWindow():
     change_pixmap_signal = pyqtSignal(np.ndarray)
@@ -38,7 +40,6 @@ class Ui_MainWindow():
         MainWindow.setStyleSheet("MainWindow{color: rgb(254, 254, 254); background-color: rgb(53, 53, 53);}")
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
-        # self.setStyleSheet("background-color: rgb(0, 255, 127);color: rgb(61, 61, 61);")
 
         self.image_label = QLabel(self)
         self.image_label.setGeometry(QtCore.QRect(30, 20, 640, 480))
@@ -51,7 +52,6 @@ class Ui_MainWindow():
         font.setFamily(self.font)
         self.startBtn.setFont(font)
         self.startBtn.setObjectName("startBtn")
-        # self.startBtn.setStyleSheet(style.setBtnStyle())
         self.startBtn.setEnabled(False)
         self.startBtn.clicked.connect(self.appStart)
 
@@ -61,7 +61,6 @@ class Ui_MainWindow():
         font.setFamily(self.font)
         self.exitBtn.setFont(font)
         self.exitBtn.setObjectName("exitBtn")
-        # self.exitBtn.setStyleSheet(style.setBtnStyle())
         self.exitBtn.clicked.connect(self.appExit)
 
         self.stopBtn = QtWidgets.QPushButton(self.centralwidget)
@@ -70,7 +69,6 @@ class Ui_MainWindow():
         font.setFamily(self.font)
         self.stopBtn.setFont(font)
         self.stopBtn.setObjectName("stopBtn")
-        # self.stopBtn.setStyleSheet(style.setBtnStyle())
         self.stopBtn.setEnabled(False)
         self.stopBtn.clicked.connect(self.appStop)
 
@@ -80,7 +78,6 @@ class Ui_MainWindow():
         font.setFamily(self.font)
         self.settingBtn.setFont(font)
         self.settingBtn.setObjectName("settingBtn")
-        # self.settingBtn.setStyleSheet(style.setBtnStyle())
         self.settingBtn.clicked.connect(self.appSettings)
 
         self.groupBox = QtWidgets.QGroupBox(self.centralwidget)
@@ -89,7 +86,6 @@ class Ui_MainWindow():
         font.setFamily(self.font)
         self.groupBox.setFont(font)
         self.groupBox.setObjectName("groupBox")
-        # self.groupBox.setStyleSheet("background-color: rgb(166, 166, 166);")
 
         self.fn03RadBtn = QtWidgets.QRadioButton(self.groupBox)
         self.fn03RadBtn.setGeometry(QtCore.QRect(20, 130, 135, 40))
@@ -117,7 +113,6 @@ class Ui_MainWindow():
         self.fn01RadBtn.setFont(font)
         self.fn01RadBtn.setObjectName("fn01RadBtn")
         self.fn01RadBtn.toggled.connect(self.selectProgram)
-
 
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
@@ -166,15 +161,15 @@ class Ui_MainWindow():
         self.startBtn.setEnabled(True)
 
     def appStart(self):
+        self.cap = cv2.VideoCapture(0)
         if (self.selectedProgram == 1):
-            self.cap = cv2.VideoCapture(0)
             self.function = Funciton01(self.cap, self.change_pixmap_signal)
         if (self.selectedProgram == 2):
-            self.cap = cv2.VideoCapture(0)
             self.function = Funciton02(self.cap, self.change_pixmap_signal)
 
         self.vbox.addWidget(self.image_label)
         self.setLayout(self.vbox)
+        self.image_label.show()
         self.function.change_pixmap_signal.connect(self.update_image)
         self.function.start()
         self.stopBtn.setEnabled(True)
@@ -185,8 +180,10 @@ class Ui_MainWindow():
 
     def appStop(self):
         self.image_label.hide()
+        while self.cap.isOpened():
+            if cv2.waitKey(0):
+                break
         self.cap.release()
-        # self.function.terminate()
         self.settingBtn.setEnabled(True)
         print("STOP")
 
@@ -220,7 +217,7 @@ class Funciton01(QThread):
 
     def run(self):
         # capture from web cam
-        with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+        with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5, smooth_landmarks=True) as pose:
             while self.cap.isOpened():
                 ret, frame = self.cap.read()
 
@@ -237,13 +234,18 @@ class Funciton01(QThread):
 
                 landmarks = results.pose_landmarks.landmark
 
-                nose = [landmarks[mp_pose.PoseLandmark.NOSE.value].x, landmarks[mp_pose.PoseLandmark.NOSE.value].y]
-
                 shoulder_left = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
                                  landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
 
                 shoulder_right = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,
                                   landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
+
+                nose = [landmarks[mp_pose.PoseLandmark.NOSE.value].x, landmarks[mp_pose.PoseLandmark.NOSE.value].y]
+                # shouder_center = [(shoulder_left[0] + shoulder_right[0])/2, (shoulder_left[1] + shoulder_right[1])/2]
+                # first_point = ()
+                # second_point = ()
+                #
+                # head_angle = 0
 
                 left_distance = np.linalg.norm(np.array(nose) - np.array(shoulder_left))
                 right_distance = np.linalg.norm(np.array(nose) - np.array(shoulder_right))
@@ -255,13 +257,14 @@ class Funciton01(QThread):
                 else:
                     status = "OK"
 
-                cv2.putText(image, "Status:", (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
-                cv2.putText(image, status, (150, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
+                # cv2.putText(image, "Status:", (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
+                cv2.putText(image, status, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
 
                 mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
                                           mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2, circle_radius=2),
                                           mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2))
                 self.change_pixmap_signal.emit(image)
+
 
 class Funciton02(QThread):
     def __init__(self, cap, change_pixmap_signal):
@@ -364,3 +367,118 @@ class Funciton02(QThread):
                         cv2.putText(image, text, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
                 self.change_pixmap_signal.emit(image)
 
+
+class Funciton03(QThread):
+    def __init__(self, cap, change_pixmap_signal):
+        QThread.__init__(self)
+        self.cap = cap
+        self.change_pixmap_signal = change_pixmap_signal
+
+    def run(self):
+        # capture from web cam
+        with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+            while self.cap.isOpened():
+                success, image = self.cap.read()
+
+                # Flip the image horizontally for a later selfie-view display
+                # Also convert the color space from BGR to RGB
+                image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+
+                # To improve performance
+                image.flags.writeable = False
+
+                # Get the result
+                results = face_mesh.process(image)
+
+                # To improve performance
+                image.flags.writeable = True
+
+                # Convert the color space from RGB to BGR
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+                img_h, img_w, img_c = image.shape
+                face_3d = []
+                face_2d = []
+
+                if results.multi_face_landmarks:
+                    for face_landmarks in results.multi_face_landmarks:
+                        for idx, lm in enumerate(face_landmarks.landmark):
+                            if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199:
+                                if idx == 199:
+                                    nose_2d = (lm.x * img_w, lm.y * img_h)
+                                    nose_3d = (lm.x * img_w, lm.y * img_h, lm.z * 8000)
+
+                                x, y = int(lm.x * img_w), int(lm.y * img_h)
+
+                                # Get the 2D Coordinates
+                                face_2d.append([x, y])
+
+                                # Get the 3D Coordinates
+                                face_3d.append([x, y, lm.z])
+
+                                # Convert it to the NumPy array
+                        face_2d = np.array(face_2d, dtype=np.float64)
+
+                        # Convert it to the NumPy array
+                        face_3d = np.array(face_3d, dtype=np.float64)
+
+                        # The camera matrix
+                        focal_length = 1 * img_w
+
+                        cam_matrix = np.array([[focal_length, 0, img_h / 2],
+                                               [0, focal_length, img_w / 2],
+                                               [0, 0, 1]])
+
+                        # The Distance Matrix
+                        dist_matrix = np.zeros((4, 1), dtype=np.float64)
+
+                        # Solve PnP
+                        success, rot_vec, trans_vec = cv2.solvePnP(face_3d, face_2d, cam_matrix, dist_matrix)
+
+                        # Get rotational matrix
+                        rmat, jac = cv2.Rodrigues(rot_vec)
+
+                        # Get angles
+                        angles, mtxR, mtxQ, Qx, Qy, Qz = cv2.RQDecomp3x3(rmat)
+
+                        # Get the y rotation degree
+                        x = angles[0] * 360
+                        y = angles[1] * 360
+                        # print(y)
+
+                        # See where the user's head tilting
+                        if y < -10:
+                            text = "LOOKING LEFT"
+                        elif y > 10:
+                            text = "LOOKING RIGHT"
+                        elif x < -10:
+                            text = "LOOKING DOWN"
+                        else:
+                            text = "LOOKING FORWARD"
+
+                        # Display the nose direction
+                        nose_3d_projection, jacobian = cv2.projectPoints(nose_3d, rot_vec, trans_vec, cam_matrix,
+                                                                         dist_matrix)
+
+                        p1 = (int(nose_2d[0]), int(nose_2d[1]))
+                        p2 = (int(nose_3d_projection[0][0][0]), int(nose_3d_projection[0][0][1]))
+
+                        cv2.line(image, p1, p2, (255, 0, 0), 2)
+
+                        # Add the text on the image
+                        cv2.putText(image, text, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
+                self.change_pixmap_signal.emit(image)
+
+
+class AppWindow(QMainWindow, Ui_MainWindow):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.ui = Ui_MainWindow()
+        self.setupUi(self)
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    appWindow = AppWindow()
+    appWindow.show()
+    sys.exit(app.exec())
