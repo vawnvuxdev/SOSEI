@@ -12,8 +12,8 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread
 import cv2
 import numpy as np
-import mediapipe as mp
 import sys
+import mediapipe as mp
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
@@ -162,10 +162,11 @@ class Ui_MainWindow():
 
     def appStart(self):
         self.cap = cv2.VideoCapture(0)
+        self.capturing = True
         if (self.selectedProgram == 1):
-            self.function = Funciton01(self.cap, self.change_pixmap_signal)
+            self.function = Funciton01(self.cap, self.change_pixmap_signal, self.capturing)
         if (self.selectedProgram == 2):
-            self.function = Funciton02(self.cap, self.change_pixmap_signal)
+            self.function = Funciton02(self.cap, self.change_pixmap_signal, self.capturing)
 
         self.vbox.addWidget(self.image_label)
         self.setLayout(self.vbox)
@@ -180,15 +181,16 @@ class Ui_MainWindow():
 
     def appStop(self):
         self.image_label.hide()
-        while self.cap.isOpened():
+        while self.capturing:
             if cv2.waitKey(0):
                 break
         self.cap.release()
+        self.capturing = False
         self.settingBtn.setEnabled(True)
         print("STOP")
 
     def appSettings(self):
-        print("settings")
+        print("SETTINGS")
 
     def appExit(self):
         self.close()
@@ -210,15 +212,16 @@ class Ui_MainWindow():
 
 
 class Funciton01(QThread):
-    def __init__(self, cap, change_pixmap_signal):
+    def __init__(self, cap, change_pixmap_signal, capturing):
         QThread.__init__(self)
         self.cap = cap
+        self.capturing = capturing
         self.change_pixmap_signal = change_pixmap_signal
 
     def run(self):
         # capture from web cam
         with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5, smooth_landmarks=True) as pose:
-            while self.cap.isOpened():
+            while self.capturing:
                 ret, frame = self.cap.read()
 
                 # Recolor to RGB
@@ -256,7 +259,7 @@ class Funciton01(QThread):
                         status = "OK"
 
                 except:
-                    status = "ERROR"
+                    status = "NO DETECTION !!"
                     pass
 
                 cv2.putText(output, status, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
@@ -264,6 +267,7 @@ class Funciton01(QThread):
                 mp_drawing.draw_landmarks(output, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
                                           mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2, circle_radius=2),
                                           mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2))
+
                 self.change_pixmap_signal.emit(output)
 
     def calculateAngle(self, landmark1, landmark2, landmark3):
@@ -281,16 +285,17 @@ class Funciton01(QThread):
 
 
 class Funciton02(QThread):
-    def __init__(self, cap, change_pixmap_signal):
+    def __init__(self, cap, change_pixmap_signal, capturing):
         QThread.__init__(self)
         self.cap = cap
+        self.capturing = capturing
         self.change_pixmap_signal = change_pixmap_signal
 
     def run(self):
         # capture from web cam
         with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
-            while self.cap.isOpened():
-                success, image = self.cap.read()
+            while self.capturing:
+                ret, image = self.cap.read()
 
                 # Flip the image horizontally for a later selfie-view display
                 # Also convert the color space from BGR to RGB
@@ -308,77 +313,82 @@ class Funciton02(QThread):
                 # Convert the color space from RGB to BGR
                 output = cv2.cvtColor(output, cv2.COLOR_RGB2BGR)
 
-                img_h, img_w, img_c = output.shape
-                face_3d = []
-                face_2d = []
+                try:
+                    img_h, img_w, img_c = output.shape
+                    face_3d = []
+                    face_2d = []
 
-                if results.multi_face_landmarks:
-                    for face_landmarks in results.multi_face_landmarks:
-                        for idx, lm in enumerate(face_landmarks.landmark):
-                            if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199:
-                                if idx == 1:
-                                    nose_2d = (lm.x * img_w, lm.y * img_h)
-                                    nose_3d = (lm.x * img_w, lm.y * img_h, lm.z * 8000)
+                    if results.multi_face_landmarks:
+                        for face_landmarks in results.multi_face_landmarks:
+                            for idx, lm in enumerate(face_landmarks.landmark):
+                                if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199:
+                                    if idx == 1:
+                                        nose_2d = (lm.x * img_w, lm.y * img_h)
+                                        nose_3d = (lm.x * img_w, lm.y * img_h, lm.z * 8000)
 
-                                x, y = int(lm.x * img_w), int(lm.y * img_h)
+                                    x, y = int(lm.x * img_w), int(lm.y * img_h)
 
-                                # Get the 2D Coordinates
-                                face_2d.append([x, y])
+                                    # Get the 2D Coordinates
+                                    face_2d.append([x, y])
 
-                                # Get the 3D Coordinates
-                                face_3d.append([x, y, lm.z])
+                                    # Get the 3D Coordinates
+                                    face_3d.append([x, y, lm.z])
 
-                                # Convert it to the NumPy array
-                        face_2d = np.array(face_2d, dtype=np.float64)
+                                    # Convert it to the NumPy array
+                            face_2d = np.array(face_2d, dtype=np.float64)
 
-                        # Convert it to the NumPy array
-                        face_3d = np.array(face_3d, dtype=np.float64)
+                            # Convert it to the NumPy array
+                            face_3d = np.array(face_3d, dtype=np.float64)
 
-                        # The camera matrix
-                        focal_length = 1 * img_w
+                            # The camera matrix
+                            focal_length = 1 * img_w
 
-                        cam_matrix = np.array([[focal_length, 0, img_h / 2],
-                                               [0, focal_length, img_w / 2],
-                                               [0, 0, 1]])
+                            cam_matrix = np.array([[focal_length, 0, img_h / 2],
+                                                   [0, focal_length, img_w / 2],
+                                                   [0, 0, 1]])
 
-                        # The Distance Matrix
-                        dist_matrix = np.zeros((4, 1), dtype=np.float64)
+                            # The Distance Matrix
+                            dist_matrix = np.zeros((4, 1), dtype=np.float64)
 
-                        # Solve PnP
-                        success, rot_vec, trans_vec = cv2.solvePnP(face_3d, face_2d, cam_matrix, dist_matrix)
+                            # Solve PnP
+                            ret, rot_vec, trans_vec = cv2.solvePnP(face_3d, face_2d, cam_matrix, dist_matrix)
 
-                        # Get rotational matrix
-                        rmat, jac = cv2.Rodrigues(rot_vec)
+                            # Get rotational matrix
+                            rmat, jac = cv2.Rodrigues(rot_vec)
 
-                        # Get angles
-                        angles, mtxR, mtxQ, Qx, Qy, Qz = cv2.RQDecomp3x3(rmat)
+                            # Get angles
+                            angles, mtxR, mtxQ, Qx, Qy, Qz = cv2.RQDecomp3x3(rmat)
 
-                        # Get the y rotation degree
-                        x = angles[0] * 360
-                        y = angles[1] * 360
-                        # print(y)
+                            # Get the y rotation degree
+                            x = angles[0] * 360
+                            y = angles[1] * 360
+                            # print(y)
 
-                        # See where the user's head tilting
-                        if y < -10:
-                            text = "LOOKING LEFT"
-                        elif y > 10:
-                            text = "LOOKING RIGHT"
-                        elif x < -10:
-                            text = "LOOKING DOWN"
-                        else:
-                            text = "LOOKING FORWARD"
+                            # See where the user's head tilting
+                            if y < -10:
+                                text = "LOOKING LEFT"
+                            elif y > 10:
+                                text = "LOOKING RIGHT"
+                            elif x < -10:
+                                text = "LOOKING DOWN"
+                            else:
+                                text = "LOOKING FORWARD"
 
-                        # Display the nose direction
-                        nose_3d_projection, jacobian = cv2.projectPoints(nose_3d, rot_vec, trans_vec, cam_matrix,
-                                                                         dist_matrix)
+                except:
+                    text = "NO DETECTION !!"
+                    pass
 
-                        p1 = (int(nose_2d[0]), int(nose_2d[1]))
-                        p2 = (int(nose_3d_projection[0][0][0]), int(nose_3d_projection[0][0][1]))
+                    # Display the nose direction
+                nose_3d_projection, jacobian = cv2.projectPoints(nose_3d, rot_vec, trans_vec, cam_matrix,
+                                                                 dist_matrix)
 
-                        cv2.line(output, p1, p2, (255, 0, 0), 2)
+                p1 = (int(nose_2d[0]), int(nose_2d[1]))
+                p2 = (int(nose_3d_projection[0][0][0]), int(nose_3d_projection[0][0][1]))
 
-                        # Add the text on the image
-                        cv2.putText(output, text, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
+                cv2.line(output, p1, p2, (255, 0, 0), 2)
+
+                # Add the text on the image
+                cv2.putText(output, text, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
                 self.change_pixmap_signal.emit(output)
 
 

@@ -1,1 +1,1 @@
-pyinstaller -w -n SOSEI -i logo.ico app_ui.py
+pyinstaller -w -n SOSEI -i logo.ico app.py
